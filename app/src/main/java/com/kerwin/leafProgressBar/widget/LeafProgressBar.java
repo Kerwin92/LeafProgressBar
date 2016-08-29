@@ -8,6 +8,7 @@ import android.graphics.Color;
 import android.graphics.Matrix;
 import android.graphics.Paint;
 import android.graphics.Path;
+import android.graphics.Rect;
 import android.graphics.RectF;
 import android.util.AttributeSet;
 import android.util.Log;
@@ -26,6 +27,10 @@ import java.util.Random;
 public class LeafProgressBar extends View {
     private static final boolean DEBUG = true;
     private static final String TAG = LeafProgressBar.class.getSimpleName();
+    /**
+     * 消失动画的执行次数
+     */
+    public static final int MAXNUM = 11;
 
     private Random mRandom = new Random();
     private Matrix mMatrix = new Matrix();
@@ -178,7 +183,7 @@ public class LeafProgressBar extends View {
 
         mFanTextPaint = new Paint();
         mFanTextPaint.setColor(Color.WHITE);
-        mFanTextPaint.setTextSize(10);
+        mFanTextPaint.setTextSize(50);
         mFanTextPaint.setStyle(Paint.Style.STROKE);
     }
 
@@ -198,15 +203,18 @@ public class LeafProgressBar extends View {
         //绘制遮罩
         mShadePaint.setStrokeWidth((mViewHeight - mProgressBaseRectF.height()) / 2);
         drawProgress(canvas, mShadeRectF, mShadePaint, true, true);
-        //绘制风扇
-        drawFan(canvas);
-        if (mProgress >= TOTAL_PROGRESS) {
-            finishLoad(canvas);
-            if (coefficient < 10) {
+        //绘制风扇背景
+        drawFanBkg(canvas);
+        if (mProgress < TOTAL_PROGRESS) {
+            //绘制风扇
+            drawFan(canvas);
+            postInvalidate();
+        } else {
+            canvas.save();
+            drawFinish(canvas);
+            if (coefficient <= MAXNUM) {
                 postInvalidate();
             }
-        } else {
-            postInvalidate();
         }
     }
 
@@ -313,17 +321,25 @@ public class LeafProgressBar extends View {
     }
 
     /**
-     * 绘制风扇
+     * 风扇的背景
      *
      * @param canvas
      */
-    private void drawFan(Canvas canvas) {
+    private void drawFanBkg(Canvas canvas) {
         //绘制风扇的底色
         canvas.drawCircle(mFenRectF.centerX(), mFenRectF.centerY(), mFenRectF.width() / 2, mFanBgPaint);
         //绘制最外面圆环
         float delta = 0.05f;
         mFanCirclePaint.setStrokeWidth(mFenRectF.width() * delta);
         canvas.drawCircle(mFenRectF.centerX(), mFenRectF.centerY(), mFenRectF.width() / 2 * (1 - delta / 2), mFanCirclePaint);
+    }
+
+    /**
+     * 绘制风扇
+     *
+     * @param canvas
+     */
+    private void drawFan(Canvas canvas) {
 
         long currentTime = System.currentTimeMillis();
         // 根据时间计算旋转角度
@@ -339,29 +355,28 @@ public class LeafProgressBar extends View {
         // 根据旋转方向确定叶子旋转角度
         int rotate = isFenClockwise ? angle : -angle;
         mMatrix.postRotate(rotate, transX + mFanBitmap.getWidth() / 2, transY + mFanBitmap.getHeight() / 2);
-        //            //绘制风扇的底色
-        //            canvas.drawCircle(mFenRectF.centerX(), mFenRectF.centerY(), mFenRectF.width() / 2, mFanBgPaint);
-        //            //绘制最外面圆环
-        //            float delta = 0.05f;
-        //            mFanCirclePaint.setStrokeWidth(mFenRectF.width() * delta);
-        //            canvas.drawCircle(mFenRectF.centerX(), mFenRectF.centerY(), mFenRectF.width() / 2 * (1 - delta / 2), mFanCirclePaint);
-
         canvas.drawBitmap(mFanBitmap, mMatrix, mBitmapPaint);
         canvas.restore();
     }
 
-    void finishLoad(Canvas canvas) {
+    void drawFinish(Canvas canvas) {
         //加载完毕时
-        mMatrix.reset();
-        mMatrix.postTranslate(mFenRectF.centerX() - mFanBitmap.getWidth() / 2, mFenRectF.centerY() - mFanBitmap.getHeight() / 2);//移动到此位置
-        canvas.scale((float) 1 / coefficient, (float) 1 / coefficient, mFenRectF.centerX(), mFenRectF.centerY());
-        canvas.drawBitmap(mFanBitmap, mMatrix, mBitmapPaint);
+        if (coefficient <= MAXNUM - 2) {
+            mMatrix.reset();
+            mMatrix.postTranslate(mFenRectF.centerX() - mFanBitmap.getWidth() / 2, mFenRectF.centerY() - mFanBitmap.getHeight() / 2);//移动到此位置
+            canvas.scale((float) 1 / coefficient, (float) 1 / coefficient, mFenRectF.centerX(), mFenRectF.centerY());
+            canvas.drawBitmap(mFanBitmap, mMatrix, mBitmapPaint);
+        } else if (coefficient <= MAXNUM) {
+            canvas.restore();
+            canvas.scale(1.2f, 1.2f, mFenRectF.centerX(), mFenRectF.centerY());
+            //100%字符串水平、竖直居中显示的处理
+            Rect bounds = new Rect();
+            mFanTextPaint.getTextBounds("100%", 0, "100%".length(), bounds);
+            Paint.FontMetricsInt fontMetrics = mFanTextPaint.getFontMetricsInt();
+            int baseline = ((int) mFenRectF.height() - fontMetrics.bottom + fontMetrics.top) / 2 - fontMetrics.top;
+            canvas.drawText("100%", mFenRectF.centerX() - bounds.width() / 2, baseline, mFanTextPaint);
+        }
         coefficient++;
-        //            while (coefficient <= 1) {
-        //                //                canvas.scale(coefficient, coefficient, mFenRectF.centerX(), mFenRectF.centerY());
-        //                canvas.drawText("100%", mFenRectF.centerX(), mFenRectF.centerY(), mFanTextPaint);
-        //                //                coefficient += 0.125;
-        //            }
     }
 
     /**
@@ -505,7 +520,7 @@ public class LeafProgressBar extends View {
      */
     private class LeafFactory {
         //叶子数
-        private static final int MAX_LEAFS = 8;
+        private static final int MAX_LEAFS = 12;
         //浮动比例
         private static final float DELTA = 0.1f;
         //用于产生时间差，防止叶子抱团出现
@@ -526,8 +541,10 @@ public class LeafProgressBar extends View {
             leaf.floatTime = (long) (mLeafFloatTime * ((1 - DELTA) + 2 * DELTA * mRandom.nextFloat()));
             leaf.rotateTime = (long) (mLeafRotateTime * ((1 - DELTA) + 2 * DELTA * mRandom.nextFloat()));
             // 为了产生交错的感觉，让开始的时间有一定的随机性
-            mDeltaStartTime += (mLeafFloatTime + mRandom.nextFloat() * leaf.floatTime) / MAX_LEAFS;
-            leaf.startTime = System.currentTimeMillis() + mDeltaStartTime % leaf.floatTime;
+            //            mDeltaStartTime += (mLeafFloatTime + mRandom.nextFloat() * leaf.floatTime) / MAX_LEAFS;
+            mDeltaStartTime += mRandom.nextInt((int) (mLeafFloatTime));
+            //            leaf.startTime = System.currentTimeMillis() + mDeltaStartTime % leaf.floatTime;
+            leaf.startTime = System.currentTimeMillis() + mDeltaStartTime;
             Log.d(TAG + "aa", "generateLeaf: " + leaf.floatTime);
             Log.d(TAG + "aa", "generateLeaf: " + leaf.rotateTime);
             Log.d(TAG + "aa", "generateLeaf: " + leaf.startTime);
